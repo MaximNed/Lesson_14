@@ -1,0 +1,80 @@
+from flask import Flask, jsonify
+import sqlite3
+
+con = sqlite3.connect("netflix.db", check_same_thread=False) 
+cur = con.cursor() 
+
+def search_by_title(title):
+    sqlite_query = f"select * from netflix where title == '{title}' order by release_year desc"
+    cur.execute(sqlite_query) 
+    film = cur.fetchall()
+    if film:
+        film = film[0]
+    return {
+                "title": film[2],
+                "country": film[5],
+                "release_year": film[7],
+                "genre": film[-2],
+                "description": film[-1]
+                }
+
+def search_by_year(start, end):
+    sqlite_query = f"select * from netflix where (release_year >= {start} AND release_year <= {end}) LIMIT 100"
+    cur.execute(sqlite_query) 
+    films = cur.fetchall()
+    list_films = [{'title': f[2], 'release_year': f[7]} for f in films]
+    return list_films
+
+def search_by_rating(rating):
+    if rating == 'G':
+        sqlite_query = f"select * from netflix where rating == '{rating}'"
+    else:
+        sqlite_query = f"select * from netflix where rating in {rating}"
+    cur.execute(sqlite_query) 
+    films = cur.fetchall()
+    list_films = [{'title': f[2], 'rating': f[-5], 'description': f[-1]} for f in films]
+    return list_films
+
+
+def search_by_genre(genre):
+    sqlite_query = f"select * from netflix where listed_in like '{genre}' order by release_year desc limit 10"
+    cur.execute(sqlite_query) 
+    films = cur.fetchall()
+    list_films = [{'title': f[2],'description': f[-1]} for f in films]
+    return list_films
+
+def search_by_type(type, year, genre):
+    sqlite_query = f"select * from netflix where type == '{type}' and release_year == '{year}' and listed_in like '{genre}'"
+    cur.execute(sqlite_query) 
+    films = cur.fetchall()
+    list_films = [{'title': f[2],'description': f[-1]} for f in films]
+    return list_films
+
+
+app = Flask(__name__)
+
+@app.route('/movie/<title>')
+def search_title(title):
+    return jsonify(search_by_title(title))
+
+@app.route('/movie/<start>/to/<end>')
+def search_year(start, end):
+    return jsonify(search_by_year(start, end))
+
+@app.route('/rating/<rating>')
+def search_rating(rating):
+    if rating == 'children':
+        return jsonify(search_by_rating(("G")))
+    elif rating == 'family':
+        return jsonify(search_by_rating(("G", "PG", "PG-13")))
+    elif rating == 'adult':
+        return jsonify(search_by_rating(("R", "NC-17")))
+    else:
+        return []
+
+
+@app.route('/genre/<genre>')
+def search_genre(genre):
+    return jsonify(search_by_genre(genre))
+
+app.run(debug=True)
